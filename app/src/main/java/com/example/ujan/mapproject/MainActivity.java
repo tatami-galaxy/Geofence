@@ -1,7 +1,9 @@
 package com.example.ujan.mapproject;
 
+import android.app.PendingIntent;
 import android.content.Intent;
 import android.content.IntentSender;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
@@ -14,6 +16,8 @@ import android.support.v7.widget.Toolbar;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.View;
+import android.widget.Button;
 import android.widget.Toast;
 
 import com.google.android.gms.common.ConnectionResult;
@@ -21,6 +25,8 @@ import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.api.PendingResult;
 import com.google.android.gms.common.api.ResultCallback;
 import com.google.android.gms.common.api.Status;
+import com.google.android.gms.location.Geofence;
+import com.google.android.gms.location.GeofencingRequest;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.location.LocationSettingsRequest;
@@ -37,7 +43,10 @@ import com.google.android.gms.maps.UiSettings;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
 
-public class MainActivity extends AppCompatActivity implements OnMapReadyCallback, GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener {
+import java.util.ArrayList;
+
+public class MainActivity extends AppCompatActivity implements OnMapReadyCallback,
+        GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener, ResultCallback<Status> {
     GoogleMap finalMap;
     UiSettings mUiSettings;
     public final String TAG = "helloUjan";
@@ -46,6 +55,16 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     LocationRequest mLocationRequest;
     GoogleApiClient mGoogleApiClient;
+
+    protected ArrayList<Geofence> mGeofenceList=new ArrayList<Geofence>();
+    private PendingIntent mGeofencePendingIntent;
+    private boolean mGeofencesAdded;
+    private SharedPreferences mSharedPreferences;
+
+    public final String GEOFENCES_ADDED_KEY="geofence_added";
+    public final String SHARED_PREFERENCES_NAME="shared_preferences";
+
+    Button button;
 
     @Override
     public void onMapReady(final GoogleMap googleMap) {
@@ -83,6 +102,14 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             }
         });
 
+        button.setOnClickListener(
+                new View.OnClickListener(){
+                    public void onClick(View view){
+                        buttonClicked(view);
+                    }
+                }
+        );
+
     }
 
     @Override
@@ -97,6 +124,12 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                     .addApi(LocationServices.API)
                     .build();
         }
+
+        mSharedPreferences = getSharedPreferences(SHARED_PREFERENCES_NAME, MODE_PRIVATE);
+        mGeofencesAdded = mSharedPreferences.getBoolean(GEOFENCES_ADDED_KEY, false);
+
+        populateGeofenceList();
+        button=(Button)findViewById(R.id.button);
 
         mLocationRequest = new LocationRequest();
         mLocationRequest.setInterval(10000);
@@ -235,6 +268,84 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                 }
             }
         }
+    }
+
+    public void populateGeofenceList(){
+
+        mGeofenceList.add(new Geofence.Builder()
+                .setRequestId("Geofence1")
+                .setCircularRegion(22.497757,88.356141,1609)
+                .setExpirationDuration(24*60*60*1000)
+                .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER | Geofence.GEOFENCE_TRANSITION_EXIT)
+                .build());
+
+    }
+
+    private GeofencingRequest getGeofencingRequest(){
+
+        GeofencingRequest.Builder builder = new GeofencingRequest.Builder();
+        builder.setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER);
+        builder.addGeofences(mGeofenceList);
+        return builder.build();
+
+    }
+
+    private PendingIntent getGeofencePendingIntent() {
+
+        if (mGeofencePendingIntent != null) {
+            return mGeofencePendingIntent;
+        }
+        Intent intent = new Intent(this, GeofenceTransitionsIntentService.class);
+        return PendingIntent.getService(this, 0, intent, PendingIntent.
+                FLAG_UPDATE_CURRENT);
+
+    }
+
+    public void buttonClicked(View view){
+
+        if (!mGoogleApiClient.isConnected()) {
+            Toast.makeText(this, "GoogleApiClient not connected", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if(!mGeofencesAdded) {
+            try {
+                LocationServices.GeofencingApi.addGeofences(
+                        mGoogleApiClient,
+                        getGeofencingRequest(),
+                        getGeofencePendingIntent()
+                ).setResultCallback(this);
+            } catch (SecurityException securityException) {
+                Log.e(TAG, securityException.toString());
+            }
+        }
+        else{
+            try {
+                LocationServices.GeofencingApi.removeGeofences(
+                        mGoogleApiClient,
+                        getGeofencePendingIntent()
+                ).setResultCallback(this);
+            } catch (SecurityException securityException) {
+                Log.e(TAG,securityException.toString());
+            }
+        }
+    }
+
+    @Override
+    public void onResult(@NonNull Status status) {
+
+        if (status.isSuccess()) {
+
+            mGeofencesAdded = !mGeofencesAdded;
+            SharedPreferences.Editor editor = mSharedPreferences.edit();
+            editor.putBoolean(GEOFENCES_ADDED_KEY, mGeofencesAdded);
+            editor.apply();
+
+            Toast.makeText(
+                    this, mGeofencesAdded ? "geofence added": "geofence removed", Toast.LENGTH_SHORT).show();
+        } else {
+            Log.e(TAG, status.getStatusMessage());
+        }
+
     }
 
 }
