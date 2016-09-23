@@ -16,7 +16,6 @@ import android.support.v7.widget.Toolbar;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
-import android.view.View;
 import android.widget.Button;
 import android.widget.Toast;
 
@@ -41,12 +40,13 @@ import com.google.android.gms.maps.MapFragment;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.UiSettings;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 
 import java.util.ArrayList;
 
 public class MainActivity extends AppCompatActivity implements OnMapReadyCallback,
-        GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener, ResultCallback<Status> {
+        GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener, ResultCallback<Status>, GoogleMap.OnMarkerClickListener {
     GoogleMap finalMap;
     UiSettings mUiSettings;
     public final String TAG = "helloUjan";
@@ -64,7 +64,8 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     public final String GEOFENCES_ADDED_KEY="geofence_added";
     public final String SHARED_PREFERENCES_NAME="shared_preferences";
 
-    Button button;
+
+    com.example.ujan.mapproject.MainActivity mapObject;
 
     @Override
     public void onMapReady(final GoogleMap googleMap) {
@@ -78,6 +79,8 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         mUiSettings.setRotateGesturesEnabled(false);
         mUiSettings.setCompassEnabled(true);
         mUiSettings.setMyLocationButtonEnabled(true);
+
+        mapObject=this;
 
 
         PlaceAutocompleteFragment autocompleteFragment = (PlaceAutocompleteFragment) getFragmentManager()
@@ -93,6 +96,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                         .position(posn)
                         .title(name));
                 finalMap.moveCamera(CameraUpdateFactory.newLatLng(posn));
+                finalMap.setOnMarkerClickListener(mapObject);
             }
 
             @Override
@@ -101,14 +105,6 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                 Log.i(TAG, "An error occurred: " + status);
             }
         });
-
-        button.setOnClickListener(
-                new View.OnClickListener(){
-                    public void onClick(View view){
-                        buttonClicked(view);
-                    }
-                }
-        );
 
     }
 
@@ -128,8 +124,6 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         mSharedPreferences = getSharedPreferences(SHARED_PREFERENCES_NAME, MODE_PRIVATE);
         mGeofencesAdded = mSharedPreferences.getBoolean(GEOFENCES_ADDED_KEY, false);
 
-        populateGeofenceList();
-        button=(Button)findViewById(R.id.button);
 
         mLocationRequest = new LocationRequest();
         mLocationRequest.setInterval(10000);
@@ -270,11 +264,11 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
     }
 
-    public void populateGeofenceList(){
+    public void populateGeofenceList(LatLng latlng){
 
         mGeofenceList.add(new Geofence.Builder()
                 .setRequestId("Geofence1")
-                .setCircularRegion(22.497757,88.356141,1609)
+                .setCircularRegion(latlng.latitude,latlng.longitude,1609)
                 .setExpirationDuration(24*60*60*1000)
                 .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER | Geofence.GEOFENCE_TRANSITION_EXIT)
                 .build());
@@ -301,11 +295,33 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     }
 
-    public void buttonClicked(View view){
+    @Override
+    public void onResult(@NonNull Status status) {
+
+        if (status.isSuccess()) {
+
+            mGeofencesAdded = !mGeofencesAdded;
+            SharedPreferences.Editor editor = mSharedPreferences.edit();
+            editor.putBoolean(GEOFENCES_ADDED_KEY, mGeofencesAdded);
+            editor.apply();
+
+            Toast.makeText(
+                    this, mGeofencesAdded ? "geofence added": "geofence removed", Toast.LENGTH_SHORT).show();
+        } else {
+            Log.e(TAG, status.getStatusMessage());
+        }
+
+    }
+
+
+    @Override
+    public boolean onMarkerClick(Marker marker) {
+
+        populateGeofenceList(marker.getPosition());
 
         if (!mGoogleApiClient.isConnected()) {
             Toast.makeText(this, "GoogleApiClient not connected", Toast.LENGTH_SHORT).show();
-            return;
+            return false;
         }
         if(!mGeofencesAdded) {
             try {
@@ -328,24 +344,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                 Log.e(TAG,securityException.toString());
             }
         }
-    }
-
-    @Override
-    public void onResult(@NonNull Status status) {
-
-        if (status.isSuccess()) {
-
-            mGeofencesAdded = !mGeofencesAdded;
-            SharedPreferences.Editor editor = mSharedPreferences.edit();
-            editor.putBoolean(GEOFENCES_ADDED_KEY, mGeofencesAdded);
-            editor.apply();
-
-            Toast.makeText(
-                    this, mGeofencesAdded ? "geofence added": "geofence removed", Toast.LENGTH_SHORT).show();
-        } else {
-            Log.e(TAG, status.getStatusMessage());
-        }
+        return false;
 
     }
-
 }
