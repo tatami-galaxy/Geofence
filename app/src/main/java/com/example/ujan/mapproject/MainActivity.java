@@ -16,7 +16,6 @@ import android.support.v7.widget.Toolbar;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
-import android.widget.Button;
 import android.widget.Toast;
 
 import com.google.android.gms.common.ConnectionResult;
@@ -81,6 +80,8 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         mUiSettings.setMyLocationButtonEnabled(true);
 
         mapObject=this;
+
+        finalMap.setPadding(0,840,0,0);
 
 
         PlaceAutocompleteFragment autocompleteFragment = (PlaceAutocompleteFragment) getFragmentManager()
